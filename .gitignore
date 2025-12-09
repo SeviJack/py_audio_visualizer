@@ -1,0 +1,42 @@
+# Prerequisites
+*.d
+*.exe
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+*.spec
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+build/
+# Python cache files
+.venv/
+dist/
+launcher/
+# Executables
+
+*.out
+*.app
+portaudio
+.vs/
+*.pdb
+*.ilk
+*.meta
+*.obj
