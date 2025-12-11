@@ -3,6 +3,7 @@ import pygame, sys
 import numpy as np
 import sounddevice as sd
 import win32gui, win32con
+import threading
 #todo
 # custom window frame
 # - transparent background button
@@ -24,6 +25,7 @@ ATTACK = 0.6   # 0..1, higher = snappier rise
 DECAY  = 0.85  # 0..1, lower = faster fall
 
 input_device = None
+stream = None
 # display parameters
 w, h = 32, 32
 margin_x, margin_y = 6, 2
@@ -117,12 +119,40 @@ def move_window_bottom_right():
     y = sh - wh
     win32gui.SetWindowPos(hwnd, 0, x, y, 0, 0, win32con.SWP_NOSIZE | win32con.SWP_NOZORDER)
 
+def start_stream(device_index, samplerate):
+    global stream
+
+    # Stop old stream if any
+    if stream is not None:
+        try:
+            stream.stop()
+            stream.close()
+        except Exception:
+            pass
+
+    dev_info = sd.query_devices(device_index)
+    channels = max(1, dev_info['max_input_channels'])
+
+    try:
+        stream = sd.InputStream(
+            device=device_index,
+            samplerate=samplerate,
+            channels=channels,
+            blocksize=blocksize,
+            callback=audio_callback
+        )
+        stream.start()
+        print(f"Started stream on device {device_index}, sr={samplerate}")
+    except Exception as e:
+        print(f"Failed to start stream: {e}")
+        stream = None
+
 # find default output and its loopback
 def connect_loopback_input():
     global input_device
     default_output = sd.default.device[1]
     output_name = sd.query_devices(default_output)['name']
-
+    print(f"Default output device: {output_name}")
     # look for "(loopback)" version of that device (maybe thread this?)
     devices = sd.query_devices()
     loopback_index = None
@@ -238,36 +268,35 @@ def audio_callback(indata, frames, time, status):
     gain_nodes = values * h * SCALE_VALUE
 
 
-# Pygame window setup
-screen = pygame.display.set_mode((total_w, total_h), pygame.RESIZABLE | pygame.NOFRAME) #noframe
-base_surface = pygame.Surface((total_w, total_h))  # offscreen render
-fade_surface = pygame.Surface((total_w, total_h), pygame.SRCALPHA)
-hwnd = pygame.display.get_wm_info()['window']
 
-set_opacity(1.0)
-make_top_level_window()
-#start
-connect_loopback_input()
-move_window_bottom_right()
-
- # draw vertical frequency label for every bar
-label_surfaces = []
-for x in range(w):
-    label_val = round(freq_labels[x], -1)
-    surf = font.render(str(int(label_val)), True, label_color)
-    surf = pygame.transform.rotate(surf, -90)
-    label_surfaces.append(surf)
-
-stream = sd.InputStream(device=input_device,
-                        samplerate=samplerate,
-                        channels=2,
-                        blocksize=blocksize,
-                        callback=audio_callback)
 
 def main():
-    global screen, hwnd, last_size, smoothed
-    stream.start()
+    global screen, hwnd, last_size, smoothed,  hovered
+    
     hovered = False
+
+    # Pygame window setup
+    screen = pygame.display.set_mode((total_w, total_h), pygame.RESIZABLE | pygame.NOFRAME) #noframe
+    base_surface = pygame.Surface((total_w, total_h))  # offscreen render
+    fade_surface = pygame.Surface((total_w, total_h), pygame.SRCALPHA)
+    hwnd = pygame.display.get_wm_info()['window']
+
+    set_opacity(1.0)
+    make_top_level_window()
+    #start
+    connect_loopback_input()
+    move_window_bottom_right()
+    
+
+    # draw vertical frequency label for every bar
+    label_surfaces = []
+    for x in range(w):
+        label_val = round(freq_labels[x], -1)
+        surf = font.render(str(int(label_val)), True, label_color)
+        surf = pygame.transform.rotate(surf, -90)
+        label_surfaces.append(surf)
+
+    start_stream(input_device, samplerate)
 
     while True:
         for e in pygame.event.get():
