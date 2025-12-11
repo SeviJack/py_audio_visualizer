@@ -263,75 +263,81 @@ stream = sd.InputStream(device=input_device,
                         channels=2,
                         blocksize=blocksize,
                         callback=audio_callback)
-stream.start()
 
-hovered = False
+def main():
+    global screen, hwnd, last_size, smoothed
+    stream.start()
+    hovered = False
 
-while True:
-    for e in pygame.event.get():
-        if e.type == pygame.QUIT:
-            stream.stop(); stream.close(); sys.exit()
+    while True:
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                stream.stop(); stream.close(); sys.exit()
 
-        if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
             if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
-                user32.ReleaseCapture()
-                user32.SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0)
+                if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                    user32.ReleaseCapture()
+                    user32.SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0)
 
-        elif e.type == pygame.VIDEORESIZE:
-            screen = pygame.display.set_mode(e.size, pygame.RESIZABLE | pygame.NOFRAME)
-            pygame.event.pump()
-            hwnd = pygame.display.get_wm_info()["window"]
-            make_top_level_window()
-            move_window_bottom_right()
+            elif e.type == pygame.VIDEORESIZE:
+                screen = pygame.display.set_mode(e.size, pygame.RESIZABLE | pygame.NOFRAME)
+                pygame.event.pump()
+                hwnd = pygame.display.get_wm_info()["window"]
+                make_top_level_window()
+                move_window_bottom_right()
+                set_opacity(1.0)
+                hovered = False
+
+        cx, cy = win32gui.GetCursorPos()
+        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+        inside = (left <= cx < right) and (top <= cy < bottom)
+        if inside and not hovered:
+            set_opacity(0.5)
+            enable_clickthrough()
+            hovered = True
+        elif not inside and hovered:
             set_opacity(1.0)
+            disable_clickthrough()
             hovered = False
+            
+        # clear base surface    
+        fade_surface.fill((0, 0, 0, 40))
+        base_surface.blit(fade_surface, (0, 0))
 
-    cx, cy = win32gui.GetCursorPos()
-    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
-    inside = (left <= cx < right) and (top <= cy < bottom)
-    if inside and not hovered:
-        set_opacity(0.5)
-        enable_clickthrough()
-        hovered = True
-    elif not inside and hovered:
-        set_opacity(1.0)
-        disable_clickthrough()
-        hovered = False
+        # exponential smoothing
+        smoothed = alpha * gain_nodes + (1 - alpha) * smoothed
+
+        # Hard floor to kill residual bars
+        smoothed[smoothed < 0.01] = 0.0
+
+        # draw gain_nodes and labels
+        for x in range(w):
+            height = int(smoothed[x])
+            X = padding_x + x * cell_x
+            for y in range(height):
+                Y = total_h - padding_y_bottom - (y + 1) * cell_y
+                pygame.draw.rect(base_surface, edge, (X, Y, led_w, led_h))
+                pygame.draw.rect(base_surface, core, (X+1, Y+1, led_w-2, led_h-2))
+            # red base
+            Y_base = total_h - padding_y_bottom - cell_y
+            pygame.draw.rect(base_surface, edge_red, (X, Y_base, led_w, led_h))
+            pygame.draw.rect(base_surface, core_red, (X+1, Y_base+1, led_w-2, led_h-2))
+            # draw label
+            base_surface.blit(label_surfaces[x], (X, total_h - padding_y_bottom))
+
         
-    # clear base surface    
-    fade_surface.fill((0, 0, 0, 40))
-    base_surface.blit(fade_surface, (0, 0))
+        # after all drawing done on base_surface:
+        cur_size = screen.get_size()
+        if cur_size == last_size:
+            screen.blit(base_surface, (0,0))
+        else:
+            base_scaled = pygame.transform.smoothscale(base_surface, cur_size)
+            screen.blit(base_scaled, (0,0))
+            last_size = cur_size
 
-    # exponential smoothing
-    smoothed = alpha * gain_nodes + (1 - alpha) * smoothed
+        pygame.display.flip()
+        clock.tick(30)
 
-    # Hard floor to kill residual bars
-    smoothed[smoothed < 0.01] = 0.0
 
-    # draw gain_nodes and labels
-    for x in range(w):
-        height = int(smoothed[x])
-        X = padding_x + x * cell_x
-        for y in range(height):
-            Y = total_h - padding_y_bottom - (y + 1) * cell_y
-            pygame.draw.rect(base_surface, edge, (X, Y, led_w, led_h))
-            pygame.draw.rect(base_surface, core, (X+1, Y+1, led_w-2, led_h-2))
-        # red base
-        Y_base = total_h - padding_y_bottom - cell_y
-        pygame.draw.rect(base_surface, edge_red, (X, Y_base, led_w, led_h))
-        pygame.draw.rect(base_surface, core_red, (X+1, Y_base+1, led_w-2, led_h-2))
-        # draw label
-        base_surface.blit(label_surfaces[x], (X, total_h - padding_y_bottom))
-
-    
-    # after all drawing done on base_surface:
-    cur_size = screen.get_size()
-    if cur_size == last_size:
-        screen.blit(base_surface, (0,0))
-    else:
-        base_scaled = pygame.transform.smoothscale(base_surface, cur_size)
-        screen.blit(base_scaled, (0,0))
-        last_size = cur_size
-
-    pygame.display.flip()
-    clock.tick(30)
+if __name__ == "__main__":
+    main()
