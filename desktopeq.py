@@ -44,7 +44,7 @@ GATE = 0.02         # adjust as needed  # 0.02 = ignore <2% of max power
 DC_CUTTOFF = 0
 
 # audio parameters
-samplerate = 48000
+samplerate = 44100
 blocksize = 8192  # ~0.16s latency
 # smoothing factor (lower = slower)
 alpha = 0.15 #4
